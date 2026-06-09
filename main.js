@@ -100,6 +100,11 @@ function loadData() {
 
     initScrollyTelling(data);
     initStateMapSlide(stateData, usGeo);
+    updateTimelineMarkers();
+    window.addEventListener(
+      "resize",
+      updateTimelineMarkers
+    );
   });
 }
 
@@ -182,18 +187,6 @@ text:"By 2013, nearly every state showed warming relative to 1960. Several north
 
 };
 
-document
-  .querySelectorAll(".timeline-marker")
-  .forEach(marker => {
-
-    const year = Number(marker.dataset.year);
-
-    const pct =
-      ((year - 1950) / (2014 - 1950)) * 100;
-
-    marker.style.left = `${pct}%`;
-
-});
 
 function initStateMapSlide(stateData, usGeo) {
   _stateClimateData = stateData;
@@ -211,10 +204,21 @@ function initStateMapSlide(stateData, usGeo) {
   });
 
   _mapColorScale =
-    d3.scaleDiverging()
-      .domain([3, 0, -2])
-      .interpolator(d3.interpolateRdBu)
-      .clamp(true);
+    d3.scaleThreshold()
+    .domain([
+      -1,
+      -0.15,
+        0.15,
+        1.5
+    ])
+    .range([
+      "#4575b4",
+      "#91bfdb",
+      "#ffffbf",
+      "#fc8d59",
+      "#d73027"
+    ]);
+
 
   const svg = d3.select("#usMapSvg");
   svg.attr("viewBox", "0 0 960 600");
@@ -259,18 +263,26 @@ function initStateMapSlide(stateData, usGeo) {
   const yearLabel = document.getElementById("mapYearLabel");
   slider.addEventListener("input", function() {
 
-    _currentMapYear = +this.value;
+    let year = +this.value;
 
-    yearLabel.textContent = _currentMapYear;
+    if (year === 1960) {
+
+      year =
+        _currentMapYear < 1960
+        ? 1959
+        : 1961;
+
+      this.value = year;
+    }
+
+    _currentMapYear = year;
+
+    yearLabel.textContent = year;
 
     updateMapColors();
-
     renderWarmingRankLists();
-
     updateClimateStory();
-
     updateTimelineMarkers();
-
   });
 
   document.getElementById("backToMapBtn").addEventListener("click", backToMap);
@@ -318,6 +330,32 @@ function updateClimateStory(){
 
 function updateTimelineMarkers(){
 
+  const slider =
+    document.getElementById("mapYearSlider");
+
+  const min = +slider.min;
+  const max = +slider.max;
+
+  const thumbSize = 20;
+
+  const usableWidth =
+    slider.clientWidth - thumbSize;
+
+  document
+    .querySelectorAll(".timeline-marker")
+    .forEach(marker => {
+
+      const year =
+        Number(marker.dataset.year);
+
+      const t =
+        (year - min) /
+        (max - min);
+
+      marker.style.left =
+        `${thumbSize/2 + t*usableWidth}px`;
+    });
+
   d3.selectAll(".timeline-marker")
     .classed("active-marker", false);
 
@@ -343,12 +381,12 @@ function computeStateSummaries(stateData) {
 
     if (data.length < 6) return;
 
-    const first = data.slice(0, WINDOW);
-    const last = data.slice(-WINDOW);
+    const first = data[0];
+    const last = data[data.length - 1];
 
-    const deltaTemp = mean(last, "tas_c") - mean(first, "tas_c");
-    const deltaAod = mean(last, "od550aer") - mean(first, "od550aer");
-    const deltaCo2 = mean(last, "co2_ppm") - mean(first, "co2_ppm");
+    const deltaTemp = last.tas_c - first.tas_c;
+    const deltaAod = last.od550aer - first.od550aer;
+    const deltaCo2 = last.co2_ppm - first.co2_ppm;
 
     summaries.push({
       state,
@@ -783,7 +821,7 @@ function renderStateSummary(s) {
     </div>
 
     <p class="summary-note">
-      Δ = average of 2012–2014 minus average of 1960–1962.
+      Δ = 2014 value minus 1960 value.
     </p>
   `;
 }
